@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Benchmark Report</title>
+  <style>
+    :root {
+      --bg: #f3f6fb;
+      --paper: #ffffff;
+      --ink: #0f172a;
+      --muted: #475569;
+      --ok: #166534;
+      --bad: #991b1b;
+      --line: #dbe2ee;
+      --accent: #0b5fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 20% 0%, #e3edff, var(--bg));
+      color: var(--ink);
+      padding: 24px;
+    }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+    h1, h2, h3 { margin: 0 0 10px; }
+    h1 { font-size: 1.7rem; }
+    h2 { font-size: 1.2rem; color: var(--accent); }
+    table {
+      width: 100%; border-collapse: collapse; font-size: 0.9rem;
+    }
+    th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 8px; }
+    th { background: #eef3ff; }
+    .muted { color: var(--muted); }
+    .ok { color: var(--ok); font-weight: 600; }
+    .bad { color: var(--bad); font-weight: 600; }
+    .mono { font-family: "IBM Plex Mono", Consolas, monospace; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>PyTorch Benchmark Report</h1>
+    <p class="muted">Run: <span class="mono">{{ metadata.run_id }}</span> | UTC: <span class="mono">{{ metadata.timestamp_utc }}</span></p>
+  </div>
+
+  <div class="card">
+    <h2>Environment</h2>
+    <p>Torch {{ environment.torch_version }} | CUDA available: {{ environment.cuda_available }}</p>
+    <table>
+      <thead><tr><th>Device</th><th>Name</th><th>Memory (GB)</th><th>SM</th></tr></thead>
+      <tbody>
+      {% for dev, info in environment.devices.items() %}
+      <tr>
+        <td class="mono">{{ dev }}</td>
+        <td>{{ info.name if info.name else info.type }}</td>
+        <td>{{ info.total_memory_gb if info.total_memory_gb else '-' }}</td>
+        <td>{{ info.sm_count if info.sm_count else '-' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Supported DTypes</h2>
+    {% for dev, cap in capabilities.devices.items() %}
+      <h3>{{ dev }}</h3>
+      <p><span class="ok">Supported:</span> {{ cap.supported_tensor_dtypes | join(', ') }}</p>
+      <p><span class="bad">Unsupported:</span> {{ cap.unsupported_tensor_dtypes | join(', ') }}</p>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h2>Tokenizer CPU Results</h2>
+    <table>
+      <thead><tr><th>Model</th><th>Prompt</th><th>Batch</th><th>Tokens/s</th><th>Docs/s</th><th>P50 ms</th><th>P95 ms</th></tr></thead>
+      <tbody>
+      {% for row in tokenizer.results %}
+      <tr>
+        <td class="mono">{{ row.model }}</td><td>{{ row.prompt_len }}</td><td>{{ row.batch }}</td>
+        <td>{{ row.tokens_per_sec }}</td><td>{{ row.docs_per_sec }}</td><td>{{ row.p50_latency_ms }}</td><td>{{ row.p95_latency_ms }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Model Inference Results</h2>
+    {% for run in model_runs %}
+      <h3>{{ run.model }} on {{ run.device }}</h3>
+      <table>
+        <thead><tr><th>DType</th><th>Mode</th><th>Prompt</th><th>Batch</th><th>Gen</th><th>Total tok/s</th><th>P50 ms</th><th>GPU MB</th></tr></thead>
+        <tbody>
+        {% for row in run.results %}
+        <tr>
+          <td>{{ row.dtype }}</td><td>{{ row.mode }}</td><td>{{ row.prompt_len }}</td><td>{{ row.batch }}</td><td>{{ row.gen_len }}</td>
+          <td>{{ row.total_tokens_per_sec }}</td><td>{{ row.p50_latency_ms }}</td><td>{{ row.gpu_max_allocated_mb }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h2>Kernel Microbench</h2>
+    <table>
+      <thead><tr><th>Device</th><th>DType</th><th>Shape</th><th>Iters/s</th><th>TFLOPS est</th><th>GB/s est</th></tr></thead>
+      <tbody>
+      {% for row in kernel.results %}
+      <tr><td>{{ row.device }}</td><td>{{ row.dtype }}</td><td>{{ row.shape }}</td><td>{{ row.iters_per_sec }}</td><td>{{ row.tflops_est }}</td><td>{{ row.gbps_est }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Skips</h2>
+    <table>
+      <thead><tr><th>Suite</th><th>Model</th><th>Device</th><th>DType</th><th>Reason</th></tr></thead>
+      <tbody>
+      {% for s in skips %}
+      <tr>
+        <td>{{ s.suite }}</td>
+        <td>{{ s.model if s.model else '-' }}</td>
+        <td>{{ s.device if s.device else '-' }}</td>
+        <td>{{ s.dtype if s.dtype else '-' }}</td>
+        <td class="mono">{{ s.reason }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>
