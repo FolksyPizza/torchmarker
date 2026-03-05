@@ -8,6 +8,10 @@ This project benchmarks LLM inference and tokenization across CPU and CUDA devic
 - Model inference throughput and latency (prefill/decode/total)
 - DType coverage for `fp32`, `fp16`, `bf16`, `int8`, `int4` (bitsandbytes), and fallback kernel checks for `int16` and other tensor dtypes
 - Kernel microbenchmarks (`matmul`) for guaranteed dtype throughput coverage
+- Maximum stress tests under sustained load
+- RAM speed and disk speed benchmarks
+- Temperature monitoring and temperature report in HTML output
+- Final suitability scoring for inference, training, and Torch playground/development
 - Support matrix and skip reasons for unsupported combinations
 
 ## Install
@@ -62,4 +66,6 @@ xdg-open artifacts/<timestamp>/report.html
 - `--num-runs 10 --warmup-runs 3`
 - `--disable-int4`
 - `--disable-kernel-fallback`
+- `--disable-stress-tests --stress-duration-sec 30`
+- `--ram-bench-size-mb 512 --disk-bench-size-mb 512`
 - `--all` / `--install` / `--run` / `--open-report`

@@ -4,3 +4,5 @@ accelerate
 bitsandbytes
 numpy
 jinja2
+psutil
+pynvml

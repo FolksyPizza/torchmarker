@@ -17,6 +17,10 @@ def _flatten_rows(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         rows.extend(row.get("results", []))
     for row in payload.get("benchmarks", {}).get("kernel_microbench", {}).get("results", []):
         rows.append(row)
+    for row in payload.get("benchmarks", {}).get("stress", {}).get("results", []):
+        rows.append(row)
+    for row in payload.get("benchmarks", {}).get("system", {}).get("results", []):
+        rows.append(row)
     return rows
 
 
@@ -42,7 +46,11 @@ def write_markdown(path: Path, payload: Dict[str, Any]) -> None:
     token_rows = payload.get("benchmarks", {}).get("tokenizer", {}).get("results", [])
     model_runs = payload.get("benchmarks", {}).get("model_inference", [])
     kernel_rows = payload.get("benchmarks", {}).get("kernel_microbench", {}).get("results", [])
+    stress_rows = payload.get("benchmarks", {}).get("stress", {}).get("results", [])
+    system_rows = payload.get("benchmarks", {}).get("system", {}).get("results", [])
     skips = payload.get("skips", [])
+    temp = payload.get("temperature", {})
+    suitability = payload.get("suitability", {})
 
     lines = ["# Benchmark Summary", ""]
     lines.append("## Environment")
@@ -55,7 +63,22 @@ def write_markdown(path: Path, payload: Dict[str, Any]) -> None:
     lines.append(f"- Tokenizer rows: {len(token_rows)}")
     lines.append(f"- Model rows: {sum(len(x.get('results', [])) for x in model_runs)}")
     lines.append(f"- Kernel rows: {len(kernel_rows)}")
+    lines.append(f"- Stress rows: {len(stress_rows)}")
+    lines.append(f"- System rows: {len(system_rows)}")
     lines.append(f"- Skips: {len(skips)}")
+    lines.append("")
+    lines.append("## Temperature")
+    lines.append(f"- Samples: {temp.get('sample_count', 0)}")
+    lines.append(f"- CPU max temp (C): {temp.get('cpu_max_temp_c')}")
+    lines.append(f"- GPU max temp (C): {temp.get('gpu_max_temp_c')}")
+    lines.append("")
+    lines.append("## Suitability Scores")
+    lines.append(f"- Inference: {suitability.get('inference', {}).get('score')} ({suitability.get('inference', {}).get('tier')})")
+    lines.append(f"- Training: {suitability.get('training', {}).get('score')} ({suitability.get('training', {}).get('tier')})")
+    lines.append(
+        f"- Torch Playground/Dev: {suitability.get('torch_playground_dev', {}).get('score')} "
+        f"({suitability.get('torch_playground_dev', {}).get('tier')})"
+    )
     lines.append("")
 
     lines.append("## Skip Reasons")
@@ -82,6 +105,10 @@ def write_html(path: Path, payload: Dict[str, Any], template_dir: Path) -> None:
         tokenizer=payload.get("benchmarks", {}).get("tokenizer", {}),
         model_runs=payload.get("benchmarks", {}).get("model_inference", []),
         kernel=payload.get("benchmarks", {}).get("kernel_microbench", {}),
+        stress=payload.get("benchmarks", {}).get("stress", {}),
+        system=payload.get("benchmarks", {}).get("system", {}),
+        temperature=payload.get("temperature", {}),
+        suitability=payload.get("suitability", {}),
         skips=payload.get("skips", []),
     )
     path.write_text(html, encoding="utf-8")

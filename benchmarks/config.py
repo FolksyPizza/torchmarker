@@ -46,6 +46,10 @@ class BenchmarkConfig:
     gen_lengths: List[int] = field(default_factory=list)
     enable_int4: bool = True
     enable_kernel_fallback: bool = True
+    enable_stress_tests: bool = True
+    stress_duration_sec: int = 30
+    ram_bench_size_mb: int = 512
+    disk_bench_size_mb: int = 512
     seed: int = 1337
 
     def resolved_prompt_lengths(self) -> List[int]:

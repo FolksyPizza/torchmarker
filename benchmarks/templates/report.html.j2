@@ -126,6 +126,69 @@
   </div>
 
   <div class="card">
+    <h2>Maximum Stress Tests</h2>
+    <table>
+      <thead><tr><th>Device</th><th>DType</th><th>Shape</th><th>Duration (s)</th><th>Iterations</th><th>Iters/s</th><th>TFLOPS est</th></tr></thead>
+      <tbody>
+      {% for row in stress.results %}
+      <tr>
+        <td>{{ row.device }}</td>
+        <td>{{ row.dtype }}</td>
+        <td>{{ row.shape }}</td>
+        <td>{{ row.duration_sec }}</td>
+        <td>{{ row.iterations }}</td>
+        <td>{{ row.iters_per_sec }}</td>
+        <td>{{ row.tflops_est }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>System Speeds (RAM/Disk)</h2>
+    <table>
+      <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
+      <tbody>
+      {% for row in system.results %}
+        {% if row.metric == "ram_copy_bandwidth_gbps" %}
+        <tr><td>RAM Copy Bandwidth</td><td>{{ row.value }} GB/s</td><td>{{ row.size_mb }} MB buffer</td></tr>
+        {% elif row.metric == "disk_throughput_mbps" %}
+        <tr><td>Disk Write Throughput</td><td>{{ row.write_mbps }} MB/s</td><td>{{ row.size_mb }} MB file</td></tr>
+        <tr><td>Disk Read Throughput</td><td>{{ row.read_mbps }} MB/s</td><td>{{ row.size_mb }} MB file</td></tr>
+        {% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Temperature Report</h2>
+    <p>Samples: {{ temperature.sample_count }} | Poll interval: {{ temperature.poll_interval_sec }}s</p>
+    <p>CPU max temp: {{ temperature.cpu_max_temp_c if temperature.cpu_max_temp_c is not none else 'N/A' }} C</p>
+    <table>
+      <thead><tr><th>GPU Device</th><th>Max Temp (C)</th></tr></thead>
+      <tbody>
+      {% for dev, t in temperature.gpu_max_temp_c.items() %}
+      <tr><td>{{ dev }}</td><td>{{ t }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Suitability Scores</h2>
+    <table>
+      <thead><tr><th>Use Case</th><th>Score</th><th>Tier</th></tr></thead>
+      <tbody>
+      <tr><td>Inference</td><td>{{ suitability.inference.score }}</td><td>{{ suitability.inference.tier }}</td></tr>
+      <tr><td>Training</td><td>{{ suitability.training.score }}</td><td>{{ suitability.training.tier }}</td></tr>
+      <tr><td>Torch Playground/Dev</td><td>{{ suitability.torch_playground_dev.score }}</td><td>{{ suitability.torch_playground_dev.tier }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
     <h2>Skips</h2>
     <table>
       <thead><tr><th>Suite</th><th>Model</th><th>Device</th><th>DType</th><th>Reason</th></tr></thead>

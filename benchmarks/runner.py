@@ -59,6 +59,11 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--disable-int4", action="store_true", default=False)
     parser.add_argument("--enable-kernel-fallback", action="store_true", default=True)
     parser.add_argument("--disable-kernel-fallback", action="store_true", default=False)
+    parser.add_argument("--enable-stress-tests", action="store_true", default=True)
+    parser.add_argument("--disable-stress-tests", action="store_true", default=False)
+    parser.add_argument("--stress-duration-sec", type=int, default=30)
+    parser.add_argument("--ram-bench-size-mb", type=int, default=512)
+    parser.add_argument("--disk-bench-size-mb", type=int, default=512)
     parser.add_argument("--seed", type=int, default=1337)
     return parser
 
@@ -78,6 +83,10 @@ def _config_from_args(args: argparse.Namespace) -> BenchmarkConfig:
         gen_lengths=parse_csv_int_arg(args.gen_lengths) if args.gen_lengths else [],
         enable_int4=not args.disable_int4,
         enable_kernel_fallback=not args.disable_kernel_fallback,
+        enable_stress_tests=not args.disable_stress_tests,
+        stress_duration_sec=args.stress_duration_sec,
+        ram_bench_size_mb=args.ram_bench_size_mb,
+        disk_bench_size_mb=args.disk_bench_size_mb,
         seed=args.seed,
     )
     if args.output_dir:
@@ -93,6 +102,10 @@ def run(cfg: BenchmarkConfig) -> Dict[str, Any]:
         from .kernel_bench import benchmark_kernel_suite
         from .model_bench import benchmark_model_suite
         from .reporting import write_csv, write_html, write_json, write_markdown
+        from .scoring import build_suitability_scores
+        from .stress_bench import benchmark_stress_suite
+        from .system_bench import benchmark_system_suite
+        from .telemetry import TemperatureMonitor
         from .tokenizer_bench import benchmark_tokenizer_cpu
     except ModuleNotFoundError as exc:
         raise RuntimeError(
@@ -124,6 +137,8 @@ def run(cfg: BenchmarkConfig) -> Dict[str, Any]:
             "tokenizer": {"suite": "tokenizer_cpu", "results": []},
             "model_inference": [],
             "kernel_microbench": {"suite": "kernel_microbench", "results": [], "skips": []},
+            "stress": {"suite": "stress", "results": [], "skips": []},
+            "system": {"suite": "system", "results": [], "skips": []},
         },
         "skips": [],
     }
@@ -131,54 +146,82 @@ def run(cfg: BenchmarkConfig) -> Dict[str, Any]:
     prompt_lengths = cfg.resolved_prompt_lengths()
     batch_sizes = cfg.resolved_batch_sizes()
     gen_lengths = cfg.resolved_gen_lengths()
+    temp_monitor = TemperatureMonitor(poll_interval_sec=1.0)
+    temp_monitor.start()
 
-    for model_id in cfg.models:
-        logger.info("Tokenizer benchmark for %s", model_id)
-        try:
-            tok = benchmark_tokenizer_cpu(
-                model_id=model_id,
-                prompt_lengths=prompt_lengths,
-                batch_sizes=batch_sizes,
-                warmup_runs=cfg.warmup_runs,
-                num_runs=cfg.num_runs,
-            )
-            payload["benchmarks"]["tokenizer"]["results"].extend(tok["results"])
-        except Exception as exc:
-            payload["skips"].append(
-                {
-                    "suite": "tokenizer_cpu",
-                    "model": model_id,
-                    "reason": str(exc),
-                }
-            )
+    try:
+        for model_id in cfg.models:
+            logger.info("Tokenizer benchmark for %s", model_id)
+            try:
+                tok = benchmark_tokenizer_cpu(
+                    model_id=model_id,
+                    prompt_lengths=prompt_lengths,
+                    batch_sizes=batch_sizes,
+                    warmup_runs=cfg.warmup_runs,
+                    num_runs=cfg.num_runs,
+                )
+                payload["benchmarks"]["tokenizer"]["results"].extend(tok["results"])
+            except Exception as exc:
+                payload["skips"].append(
+                    {
+                        "suite": "tokenizer_cpu",
+                        "model": model_id,
+                        "reason": str(exc),
+                    }
+                )
 
-        for device in devices:
-            logger.info("Model benchmark for model=%s device=%s", model_id, device)
-            out = benchmark_model_suite(
-                model_id=model_id,
-                device=device,
-                modes=cfg.modes,
+            for device in devices:
+                logger.info("Model benchmark for model=%s device=%s", model_id, device)
+                out = benchmark_model_suite(
+                    model_id=model_id,
+                    device=device,
+                    modes=cfg.modes,
+                    dtypes=selected_dtypes,
+                    prompt_lengths=prompt_lengths,
+                    batch_sizes=batch_sizes,
+                    gen_lengths=gen_lengths,
+                    warmup_runs=cfg.warmup_runs,
+                    num_runs=cfg.num_runs,
+                )
+                payload["benchmarks"]["model_inference"].append(out)
+                payload["skips"].extend(out.get("skips", []))
+                payload["capabilities"]["models"].setdefault(model_id, {}).update(out.get("supported", {}))
+
+        if cfg.enable_kernel_fallback:
+            logger.info("Kernel fallback benchmark")
+            kern = benchmark_kernel_suite(
+                devices=devices,
                 dtypes=selected_dtypes,
-                prompt_lengths=prompt_lengths,
-                batch_sizes=batch_sizes,
-                gen_lengths=gen_lengths,
                 warmup_runs=cfg.warmup_runs,
                 num_runs=cfg.num_runs,
             )
-            payload["benchmarks"]["model_inference"].append(out)
-            payload["skips"].extend(out.get("skips", []))
-            payload["capabilities"]["models"].setdefault(model_id, {}).update(out.get("supported", {}))
+            payload["benchmarks"]["kernel_microbench"] = kern
+            payload["skips"].extend(kern.get("skips", []))
 
-    if cfg.enable_kernel_fallback:
-        logger.info("Kernel fallback benchmark")
-        kern = benchmark_kernel_suite(
-            devices=devices,
-            dtypes=selected_dtypes,
-            warmup_runs=cfg.warmup_runs,
-            num_runs=cfg.num_runs,
+        if cfg.enable_stress_tests:
+            logger.info("Stress benchmark")
+            stress = benchmark_stress_suite(
+                devices=devices,
+                dtypes=selected_dtypes,
+                duration_sec=cfg.stress_duration_sec,
+            )
+            payload["benchmarks"]["stress"] = stress
+            payload["skips"].extend(stress.get("skips", []))
+
+        logger.info("System benchmark (RAM/Disk)")
+        system = benchmark_system_suite(
+            output_dir=cfg.output_dir,
+            ram_size_mb=cfg.ram_bench_size_mb,
+            disk_size_mb=cfg.disk_bench_size_mb,
         )
-        payload["benchmarks"]["kernel_microbench"] = kern
-        payload["skips"].extend(kern.get("skips", []))
+        payload["benchmarks"]["system"] = system
+        payload["skips"].extend(system.get("skips", []))
+    finally:
+        temp_monitor.stop()
+        payload["temperature"] = temp_monitor.summary()
+        temp_monitor.close()
+
+    payload["suitability"] = build_suitability_scores(payload)
 
     write_supported_types_log(
         cfg.output_dir / "supported_types.log",
