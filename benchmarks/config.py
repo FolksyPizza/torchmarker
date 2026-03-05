@@ -50,6 +50,9 @@ class BenchmarkConfig:
     stress_duration_sec: int = 30
     ram_bench_size_mb: int = 512
     disk_bench_size_mb: int = 512
+    enable_ai_diagnosis: bool = True
+    ai_model: str = "qwen3.5:2b"
+    ai_timeout_sec: int = 90
     seed: int = 1337
 
     def resolved_prompt_lengths(self) -> List[int]:

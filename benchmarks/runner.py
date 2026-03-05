@@ -64,6 +64,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--stress-duration-sec", type=int, default=30)
     parser.add_argument("--ram-bench-size-mb", type=int, default=512)
     parser.add_argument("--disk-bench-size-mb", type=int, default=512)
+    parser.add_argument("--enable-ai-diagnosis", action="store_true", default=True)
+    parser.add_argument("--disable-ai-diagnosis", action="store_true", default=False)
+    parser.add_argument("--ai-model", default="qwen3.5:2b")
+    parser.add_argument("--ai-timeout-sec", type=int, default=90)
     parser.add_argument("--seed", type=int, default=1337)
     return parser
 
@@ -87,6 +91,9 @@ def _config_from_args(args: argparse.Namespace) -> BenchmarkConfig:
         stress_duration_sec=args.stress_duration_sec,
         ram_bench_size_mb=args.ram_bench_size_mb,
         disk_bench_size_mb=args.disk_bench_size_mb,
+        enable_ai_diagnosis=not args.disable_ai_diagnosis,
+        ai_model=args.ai_model,
+        ai_timeout_sec=args.ai_timeout_sec,
         seed=args.seed,
     )
     if args.output_dir:
@@ -99,6 +106,8 @@ def run(cfg: BenchmarkConfig) -> Dict[str, Any]:
     _seed_everything(cfg.seed)
     cfg.output_dir.mkdir(parents=True, exist_ok=True)
     try:
+        from .ai_advisor import generate_ai_diagnosis
+        from .diagnostics import analyze_bottlenecks
         from .kernel_bench import benchmark_kernel_suite
         from .model_bench import benchmark_model_suite
         from .reporting import write_csv, write_html, write_json, write_markdown
@@ -222,6 +231,22 @@ def run(cfg: BenchmarkConfig) -> Dict[str, Any]:
         temp_monitor.close()
 
     payload["suitability"] = build_suitability_scores(payload)
+    payload["diagnostics"] = analyze_bottlenecks(payload)
+    if cfg.enable_ai_diagnosis:
+        payload["ai_diagnosis"] = generate_ai_diagnosis(
+            payload=payload,
+            diagnostics=payload["diagnostics"],
+            model=cfg.ai_model,
+            timeout_sec=cfg.ai_timeout_sec,
+        )
+    else:
+        payload["ai_diagnosis"] = {
+            "enabled": False,
+            "model": cfg.ai_model,
+            "status": "disabled",
+            "reason": None,
+            "output": None,
+        }
 
     write_supported_types_log(
         cfg.output_dir / "supported_types.log",

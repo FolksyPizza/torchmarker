@@ -1,7 +1,9 @@
 """PyTorch benchmark suite package."""
 
 __all__ = [
+    "ai_advisor",
     "config",
+    "diagnostics",
     "discovery",
     "kernel_bench",
     "logging_utils",

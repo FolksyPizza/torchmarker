@@ -12,6 +12,8 @@ This project benchmarks LLM inference and tokenization across CPU and CUDA devic
 - RAM speed and disk speed benchmarks
 - Temperature monitoring and temperature report in HTML output
 - Final suitability scoring for inference, training, and Torch playground/development
+- Bottleneck diagnostics, upgrade suggestions, and throttling/high-temp alerts
+- Optional AI-accelerated diagnosis via local Ollama model (default `qwen3.5:2b`)
 - Support matrix and skip reasons for unsupported combinations
 
 ## Install
@@ -68,4 +70,5 @@ xdg-open artifacts/<timestamp>/report.html
 - `--disable-kernel-fallback`
 - `--disable-stress-tests --stress-duration-sec 30`
 - `--ram-bench-size-mb 512 --disk-bench-size-mb 512`
+- `--disable-ai-diagnosis --ai-model qwen3.5:2b --ai-timeout-sec 90`
 - `--all` / `--install` / `--run` / `--open-report`

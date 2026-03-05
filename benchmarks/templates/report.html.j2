@@ -174,6 +174,40 @@
       {% endfor %}
       </tbody>
     </table>
+    {% if diagnostics.thermal_alerts %}
+    <p class="bad">Thermal alerts:</p>
+    <ul>
+      {% for alert in diagnostics.thermal_alerts %}
+      <li>{{ alert }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="ok">No high-temperature alerts detected.</p>
+    {% endif %}
+    <p>
+      Throttling suspected:
+      {% if diagnostics.throttling.suspected %}
+        <span class="bad">Yes</span>
+      {% else %}
+        <span class="ok">No</span>
+      {% endif %}
+    </p>
+    {% if diagnostics.throttling.events %}
+    <table>
+      <thead><tr><th>Device</th><th>DType</th><th>First Window Iters/s</th><th>Last Window Iters/s</th><th>Drop Ratio</th></tr></thead>
+      <tbody>
+      {% for ev in diagnostics.throttling.events %}
+      <tr>
+        <td>{{ ev.device }}</td>
+        <td>{{ ev.dtype }}</td>
+        <td>{{ ev.first_window_iters_per_sec }}</td>
+        <td>{{ ev.last_window_iters_per_sec }}</td>
+        <td>{{ ev.drop_ratio }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
   </div>
 
   <div class="card">
@@ -186,6 +220,38 @@
       <tr><td>Torch Playground/Dev</td><td>{{ suitability.torch_playground_dev.score }}</td><td>{{ suitability.torch_playground_dev.tier }}</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="card">
+    <h2>Bottlenecks and Upgrade Suggestions</h2>
+    <h3>Likely Bottlenecks</h3>
+    <table>
+      <thead><tr><th>Area</th><th>Severity</th><th>Issue</th></tr></thead>
+      <tbody>
+      {% for b in diagnostics.bottlenecks %}
+      <tr><td>{{ b.area }}</td><td>{{ b.severity }}</td><td>{{ b.issue }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <h3>Suggested Upgrades</h3>
+    <ul>
+      {% for s in diagnostics.upgrade_suggestions %}
+      <li>{{ s }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>AI-Accelerated Diagnosis</h2>
+    <p>Status: {{ ai_diagnosis.status }} | Model: {{ ai_diagnosis.model }}</p>
+    {% if ai_diagnosis.reason %}
+    <p class="muted">Reason: {{ ai_diagnosis.reason }}</p>
+    {% endif %}
+    {% if ai_diagnosis.output %}
+    <pre class="mono" style="white-space: pre-wrap;">{{ ai_diagnosis.output }}</pre>
+    {% else %}
+    <p class="muted">No AI output captured for this run.</p>
+    {% endif %}
   </div>
 
   <div class="card">

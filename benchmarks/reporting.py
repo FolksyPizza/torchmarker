@@ -51,6 +51,8 @@ def write_markdown(path: Path, payload: Dict[str, Any]) -> None:
     skips = payload.get("skips", [])
     temp = payload.get("temperature", {})
     suitability = payload.get("suitability", {})
+    diagnostics = payload.get("diagnostics", {})
+    ai_diag = payload.get("ai_diagnosis", {})
 
     lines = ["# Benchmark Summary", ""]
     lines.append("## Environment")
@@ -79,6 +81,27 @@ def write_markdown(path: Path, payload: Dict[str, Any]) -> None:
         f"- Torch Playground/Dev: {suitability.get('torch_playground_dev', {}).get('score')} "
         f"({suitability.get('torch_playground_dev', {}).get('tier')})"
     )
+    lines.append("")
+    lines.append("## Bottlenecks")
+    for item in diagnostics.get("bottlenecks", [])[:20]:
+        lines.append(f"- [{item.get('severity')}] {item.get('area')}: {item.get('issue')}")
+    if not diagnostics.get("bottlenecks"):
+        lines.append("- No major bottlenecks detected.")
+    lines.append("")
+    lines.append("## Upgrade Suggestions")
+    for s in diagnostics.get("upgrade_suggestions", [])[:20]:
+        lines.append(f"- {s}")
+    if not diagnostics.get("upgrade_suggestions"):
+        lines.append("- None")
+    lines.append("")
+    lines.append("## AI Diagnosis")
+    lines.append(f"- Status: {ai_diag.get('status')}")
+    lines.append(f"- Model: {ai_diag.get('model')}")
+    if ai_diag.get("reason"):
+        lines.append(f"- Reason: {ai_diag.get('reason')}")
+    if ai_diag.get("output"):
+        lines.append("- Output:")
+        lines.append(ai_diag.get("output"))
     lines.append("")
 
     lines.append("## Skip Reasons")
@@ -109,6 +132,8 @@ def write_html(path: Path, payload: Dict[str, Any], template_dir: Path) -> None:
         system=payload.get("benchmarks", {}).get("system", {}),
         temperature=payload.get("temperature", {}),
         suitability=payload.get("suitability", {}),
+        diagnostics=payload.get("diagnostics", {}),
+        ai_diagnosis=payload.get("ai_diagnosis", {}),
         skips=payload.get("skips", []),
     )
     path.write_text(html, encoding="utf-8")

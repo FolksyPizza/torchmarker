@@ -78,16 +78,28 @@ def benchmark_stress_suite(
             iters = 0
             t0 = time.perf_counter()
             deadline = t0 + duration_sec
+            last_tick = t0
+            window_iters = 0
+            windows = []
 
             while time.perf_counter() < deadline:
                 _ = a @ b
                 _sync(device)
                 iters += 1
+                window_iters += 1
+                now = time.perf_counter()
+                if now - last_tick >= 1.0:
+                    w_elapsed = now - last_tick
+                    windows.append(window_iters / w_elapsed if w_elapsed > 0 else 0.0)
+                    last_tick = now
+                    window_iters = 0
 
             elapsed = time.perf_counter() - t0
             ops = 2 * (n**3) * max(iters, 1)
             tflops = (ops / elapsed) / 1e12 if elapsed > 0 else 0.0
             iters_per_sec = iters / elapsed if elapsed > 0 else 0.0
+            first_window = windows[0] if windows else None
+            last_window = windows[-1] if windows else None
 
             results.append(
                 {
@@ -98,6 +110,8 @@ def benchmark_stress_suite(
                     "duration_sec": round(elapsed, 3),
                     "iterations": iters,
                     "iters_per_sec": round(iters_per_sec, 4),
+                    "first_window_iters_per_sec": round(first_window, 4) if first_window else None,
+                    "last_window_iters_per_sec": round(last_window, 4) if last_window else None,
                     "tflops_est": round(tflops, 4),
                 }
             )
