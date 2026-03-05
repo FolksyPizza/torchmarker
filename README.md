@@ -1,6 +1,7 @@
 # PyTorch CPU/GPU Benchmark Suite
 
 This project benchmarks LLM inference and tokenization across CPU and CUDA devices with dtype coverage and report generation.
+It also auto-detects Apple Metal (`mps`) when available, and reports host architecture (ARM/x86-64).
 
 ## What it benchmarks
 

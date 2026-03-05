@@ -11,6 +11,8 @@ from .discovery import DTYPE_TO_TORCH
 def _sync(device: str) -> None:
     if device.startswith("cuda"):
         torch.cuda.synchronize(device)
+    elif device == "mps":
+        torch.mps.synchronize()
 
 
 def _shape_candidates(device: str) -> List[int]:

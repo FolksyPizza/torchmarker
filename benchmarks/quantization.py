@@ -24,6 +24,7 @@ def load_model_with_dtype(
             model_id,
             quantization_config=qconf,
             device_map="auto" if device.startswith("cuda") else None,
+            use_safetensors=False,
             trust_remote_code=trust_remote_code,
         )
         meta["quantized"] = True
@@ -39,6 +40,7 @@ def load_model_with_dtype(
             model_id,
             quantization_config=qconf,
             device_map="auto" if device.startswith("cuda") else None,
+            use_safetensors=False,
             trust_remote_code=trust_remote_code,
         )
         meta["quantized"] = True
@@ -56,6 +58,7 @@ def load_model_with_dtype(
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         dtype=torch_dtype,
+        use_safetensors=False,
         trust_remote_code=trust_remote_code,
     )
     if device != "cpu":

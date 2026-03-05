@@ -14,6 +14,8 @@ from .quantization import load_model_with_dtype
 def _sync_if_needed(device: str) -> None:
     if device.startswith("cuda"):
         torch.cuda.synchronize(device)
+    elif device == "mps":
+        torch.mps.synchronize()
 
 
 def _peak_memory(device: str) -> Dict[str, float]:
@@ -21,6 +23,13 @@ def _peak_memory(device: str) -> Dict[str, float]:
         allocated = torch.cuda.max_memory_allocated(device) / (1024**2)
         reserved = torch.cuda.max_memory_reserved(device) / (1024**2)
         return {"gpu_max_allocated_mb": round(allocated, 2), "gpu_max_reserved_mb": round(reserved, 2)}
+    if device == "mps" and hasattr(torch, "mps"):
+        try:
+            allocated = torch.mps.current_allocated_memory() / (1024**2)
+            driver = torch.mps.driver_allocated_memory() / (1024**2)
+            return {"gpu_max_allocated_mb": round(allocated, 2), "gpu_max_reserved_mb": round(driver, 2)}
+        except Exception:
+            return {"gpu_max_allocated_mb": 0.0, "gpu_max_reserved_mb": 0.0}
     return {"gpu_max_allocated_mb": 0.0, "gpu_max_reserved_mb": 0.0}
 
 
@@ -94,28 +103,79 @@ def benchmark_model_suite(
                     }
                 )
                 continue
+            max_positions = int(
+                getattr(model.config, "max_position_embeddings", 0) or getattr(model.config, "n_positions", 0) or 0
+            )
 
             for plen in prompt_lengths:
                 for batch in batch_sizes:
+                    max_prompt_len = plen
+                    if max_positions > 0:
+                        max_prompt_len = max(1, min(plen, max_positions - 1))
                     prompts = _build_prompts(plen, batch)
-                    enc = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True)
+                    enc = tokenizer(
+                        prompts,
+                        return_tensors="pt",
+                        padding=True,
+                        truncation=True,
+                        max_length=max_prompt_len,
+                    )
                     if device != "cpu":
                         enc = {k: v.to(device) for k, v in enc.items()}
 
                     for gen_len in gen_lengths:
+                        input_len = int(enc["input_ids"].shape[-1])
+                        safe_gen_len = gen_len
+                        if max_positions > 0:
+                            safe_gen_len = max_positions - input_len
+                        if safe_gen_len <= 0:
+                            skips.append(
+                                {
+                                    "suite": "model_inference",
+                                    "model": model_id,
+                                    "device": device,
+                                    "dtype": dtype_key,
+                                    "mode": mode,
+                                    "reason": (
+                                        f"skipped: context limit exceeded (input_len={input_len}, "
+                                        f"max_positions={max_positions})"
+                                    ),
+                                }
+                            )
+                            continue
+                        safe_gen_len = min(gen_len, safe_gen_len)
                         latencies = []
                         gen_tokens_total = 0
 
                         if device.startswith("cuda"):
                             torch.cuda.reset_peak_memory_stats(device)
 
-                        for _ in range(warmup_runs):
-                            _run_generate(model, enc, gen_len, device)
+                        run_error = None
+                        try:
+                            for _ in range(warmup_runs):
+                                _run_generate(model, enc, safe_gen_len, device)
 
-                        for _ in range(num_runs):
-                            elapsed, gen_tok = _run_generate(model, enc, gen_len, device)
-                            latencies.append(elapsed)
-                            gen_tokens_total += gen_tok * batch
+                            for _ in range(num_runs):
+                                elapsed, gen_tok = _run_generate(model, enc, safe_gen_len, device)
+                                latencies.append(elapsed)
+                                gen_tokens_total += gen_tok * batch
+                        except Exception as exc:
+                            run_error = exc
+                        if run_error is not None:
+                            skips.append(
+                                {
+                                    "suite": "model_inference",
+                                    "model": model_id,
+                                    "device": device,
+                                    "dtype": dtype_key,
+                                    "mode": mode,
+                                    "reason": f"generate_failed: {run_error}",
+                                    "prompt_len": plen,
+                                    "batch": batch,
+                                    "gen_len": gen_len,
+                                }
+                            )
+                            continue
 
                         total_time = sum(latencies)
                         input_tokens = int(enc["input_ids"].numel()) * num_runs
@@ -131,7 +191,7 @@ def benchmark_model_suite(
                             "mode": mode,
                             "prompt_len": plen,
                             "batch": batch,
-                            "gen_len": gen_len,
+                            "gen_len": safe_gen_len,
                             "num_runs": num_runs,
                             "prefill_tokens_per_sec": round(prefill_tps, 2),
                             "decode_tokens_per_sec": round(decode_tps, 2),

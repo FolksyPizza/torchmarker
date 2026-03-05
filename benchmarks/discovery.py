@@ -34,6 +34,8 @@ def resolve_devices(raw_devices: List[str]) -> List[str]:
         devices = ["cpu"]
         if torch.cuda.is_available():
             devices.extend([f"cuda:{i}" for i in range(torch.cuda.device_count())])
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            devices.append("mps")
         return devices
     return raw_devices
 
@@ -43,6 +45,9 @@ def _dtype_supported_on_device(device: str, dtype_key: str) -> bool:
         dtype = DTYPE_TO_TORCH[dtype_key]
         if device.startswith("cuda") and not torch.cuda.is_available():
             return False
+        if device == "mps":
+            if not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
+                return False
         if dtype_key == "fp16" and device == "cpu":
             return False
         # BF16 tensor ops are commonly unsupported on older CUDA cards and some CPUs.
@@ -51,6 +56,8 @@ def _dtype_supported_on_device(device: str, dtype_key: str) -> bool:
         _ = a @ b
         if device.startswith("cuda"):
             torch.cuda.synchronize(device)
+        elif device == "mps":
+            torch.mps.synchronize()
         return True
     except Exception:
         return False
@@ -59,6 +66,7 @@ def _dtype_supported_on_device(device: str, dtype_key: str) -> bool:
 def detect_environment(devices: List[str]) -> Dict:
     env = {
         "platform": platform.platform(),
+        "architecture": platform.machine(),
         "python": platform.python_version(),
         "torch_version": torch.__version__,
         "cuda_available": torch.cuda.is_available(),
@@ -69,7 +77,12 @@ def detect_environment(devices: List[str]) -> Dict:
     }
 
     for device in devices:
-        info = {"type": "cpu" if device == "cpu" else "cuda"}
+        if device == "cpu":
+            info = {"type": "cpu"}
+        elif device == "mps":
+            info = {"type": "mps", "name": "Apple Metal (MPS)"}
+        else:
+            info = {"type": "cuda"}
         if device.startswith("cuda") and torch.cuda.is_available():
             idx = int(device.split(":")[-1])
             props = torch.cuda.get_device_properties(idx)

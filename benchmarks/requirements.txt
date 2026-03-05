@@ -5,4 +5,4 @@ bitsandbytes
 numpy
 jinja2
 psutil
-pynvml
+nvidia-ml-py
