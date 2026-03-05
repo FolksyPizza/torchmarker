@@ -121,16 +121,26 @@ if [[ "$DO_RUN" -eq 1 ]]; then
   "$PYTHON_BIN" main.py "${RUN_ARGS[@]}"
 fi
 
-if [[ "$DO_OPEN" -eq 1 ]]; then
-  REPORT_PATH=""
-  if [[ -n "$OUTPUT_DIR" ]]; then
-    REPORT_PATH="$OUTPUT_DIR/report.html"
-  else
-    LATEST_DIR="$(ls -1dt artifacts/* 2>/dev/null | head -n1 || true)"
-    if [[ -n "$LATEST_DIR" ]]; then
-      REPORT_PATH="$LATEST_DIR/report.html"
-    fi
+REPORT_PATH=""
+if [[ -n "$OUTPUT_DIR" ]]; then
+  REPORT_PATH="$OUTPUT_DIR/report.html"
+else
+  LATEST_DIR="$(ls -1dt artifacts/* 2>/dev/null | head -n1 || true)"
+  if [[ -n "$LATEST_DIR" ]]; then
+    REPORT_PATH="$LATEST_DIR/report.html"
   fi
+fi
+
+if [[ -n "$REPORT_PATH" && -f "$REPORT_PATH" ]]; then
+  if command -v realpath >/dev/null 2>&1; then
+    REPORT_ABS="$(realpath "$REPORT_PATH")"
+  else
+    REPORT_ABS="$REPORT_PATH"
+  fi
+  echo "Report link: file://$REPORT_ABS"
+fi
+
+if [[ "$DO_OPEN" -eq 1 ]]; then
   if [[ -n "$REPORT_PATH" && -f "$REPORT_PATH" ]]; then
     if command -v xdg-open >/dev/null 2>&1; then
       xdg-open "$REPORT_PATH" >/dev/null 2>&1 || true

@@ -185,11 +185,16 @@ def run(cfg: BenchmarkConfig) -> Dict[str, Any]:
         payload["capabilities"],
     )
 
-    write_json(cfg.output_dir / "results.json", payload)
-    write_csv(cfg.output_dir / "results.csv", payload)
-    write_markdown(cfg.output_dir / "summary.md", payload)
+    results_json_path = cfg.output_dir / "results.json"
+    results_csv_path = cfg.output_dir / "results.csv"
+    summary_md_path = cfg.output_dir / "summary.md"
+    report_html_path = cfg.output_dir / "report.html"
+
+    write_json(results_json_path, payload)
+    write_csv(results_csv_path, payload)
+    write_markdown(summary_md_path, payload)
     write_html(
-        cfg.output_dir / "report.html",
+        report_html_path,
         payload,
         template_dir=Path(__file__).parent / "templates",
     )
@@ -197,6 +202,11 @@ def run(cfg: BenchmarkConfig) -> Dict[str, Any]:
     (cfg.output_dir / "environment.json").write_text(
         json.dumps(env, indent=2, sort_keys=True), encoding="utf-8"
     )
+
+    report_link = report_html_path.resolve().as_uri()
+    logger.info("Report HTML: %s", report_html_path.resolve())
+    logger.info("Open report link: %s", report_link)
+    print(f"Report link: {report_link}")
 
     return payload
 
